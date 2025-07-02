@@ -84,10 +84,10 @@ sym = symbolic_simple+PatternMatcher([
   # substitute BITCAST/CONTIGUOUS with BUFFER_VIEW on DISK
   (UPat((Ops.BITCAST, Ops.CONTIGUOUS), src=(UPat.var("x"),), name="t"), lambda x,t: UOp(Ops.BUFFER_VIEW, t.dtype, (x.base,),
     (t.size, x.st.views[0].offset)).reshape(t.shape) if isinstance(x.device, str) and x.device.startswith("DISK") else None),
-  # double ASSIGN builder to same target is one ASSIGN builder
-  (UPat.assign(UPat.var("t"), UPat.assign(UPat.var("t"), UPat.var("x"))), lambda x,t: t.assign(x.contiguous())),
-  # ASSIGN builder to unrealized replaces the UOp
-  (UPat.assign(UPat.var("t"), UPat.var("x")), lambda x,t: x.contiguous() if t.base.op not in {Ops.BUFFER, Ops.BUFFER_VIEW} and
+  # double ASSIGN to same target is one ASSIGN
+  (UPat(Ops.STORE, src=(UPat.var("t"), UPat(Ops.STORE, src=(UPat.var("t"), UPat.var("x"))))), lambda x,t: t.assign(x.contiguous())),
+  # ASSIGN to unrealized replaces the UOp
+  (UPat(Ops.STORE, src=(UPat.var("t"), UPat.var("x"))), lambda x,t: x.contiguous() if t.base.op not in {Ops.BUFFER, Ops.BUFFER_VIEW} and
    not (t.base.op is Ops.MSTACK and all(x.op is Ops.BUFFER for x in t.base.src)) else None),
   # put CAST to smaller dtype before EXPAND
   (UPat(Ops.CAST, name="cast", src=(UPat(Ops.VIEW, name="vm"),)), lambda cast,vm: vm.base.cast(cast.dtype).view(vm.st)
@@ -188,7 +188,7 @@ def reduce_push_add_ones(src:UOp, r:UOp, view:UOp):
   return None
 
 view_left = merge_views+PatternMatcher([
-  # view before elementwise and buffer ops (only through ALU and ASSIGN builder semantics)
+  # view before elementwise and buffer ops
   (UPat(Ops.VIEW, src=(UPat({*GroupOp.ALU, Ops.CAST, Ops.BITCAST, Ops.BIND, Ops.LOAD, Ops.VALID}, name="e"),), name="view"),
    lambda e,view: e.replace(src=tuple(s.view(view.st) for s in e.src))),
   # if there's ones added after reduce, put this before the reduce
@@ -256,7 +256,7 @@ add_buffer_ops = PatternMatcher([
   (UPat(Ops.SINK, src=(UPat(GroupOp.Meta, name="x"),)), lambda x:x),
   (UPat(Ops.SINK, src=UPat(GroupOp.All-{Ops.STORE}), name="sink"), lambda ctx,sink:
    UOp.sink(*[UOp.store(UOp(Ops.DEFINE_GLOBAL, (s:=x.base).dtype.ptr(ctx[i].size), (), i).view(s.st), s) for i,x in enumerate(sink.src)])),
-  # passthrough ASSIGN (only passthrough non-void STORE, to avoid removing memory store ops)
+  # passthrough ASSIGN
   (UPat(Ops.STORE, name="x"), lambda x: x.src[1] if x.dtype is not dtypes.void else None),
   # VALID
   (UPat(Ops.VIEW, src=(UPat.cvar(),), name="self"), UOp.valid),
@@ -283,8 +283,8 @@ fix_kernel_ops = PatternMatcher([
 ])
 
 replace_globals = PatternMatcher([
-  # replace ASSIGN builder with the target BUFFER
-  (UPat.assign(UPat(Ops.BUFFER), UPat(Ops.KERNEL), name="assign", allow_any_len=True), lambda assign: assign.src[0]),
+  # replace ASSIGN with the target BUFFER
+  (UPat(Ops.STORE, src=(UPat(Ops.BUFFER), UPat(Ops.KERNEL)), name="assign", allow_any_len=True), lambda assign: assign.src[0]),
   # HACK: select the 0 branch of MSTACK (the device is wrong after this, is that okay?)
   (UPat(Ops.MSTACK, name="x"), lambda x: x.src[0]),
 ])
@@ -315,7 +315,7 @@ def append_metadata(root:UOp, k:UOp):
   if not root.metadata or (new_metadata:=tuple(dedup(k.arg.metadata+root.metadata))) == k.arg.metadata: return None
   return root.replace(src=(root.src[0], k.replace(arg=Kernel(k.arg.ast, new_metadata)))+root.src[2:])
 
-replace_metadata = PatternMatcher([(UPat.assign(UPat.var(), UPat(Ops.KERNEL, name="k"), name="root", allow_any_len=True), append_metadata),])
+replace_metadata = PatternMatcher([(UPat(Ops.STORE, src=(UPat(), UPat(Ops.KERNEL, name="k")), name="root", allow_any_len=True), append_metadata),])
 
 pm_fuse = PatternMatcher([
   # FUSE on CONTIGUOUS removes FUSE
