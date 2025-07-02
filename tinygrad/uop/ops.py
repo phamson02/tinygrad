@@ -267,7 +267,7 @@ class UOp(MathTrait, metaclass=UOpMetaClass):
       ret, new_axis = self, axis
     ret = UOp(Ops.REDUCE_AXIS, self.dtype, (ret,), (op, new_axis))
     return ret.reshape(tuple([x if i not in axis else 1 for i,x in enumerate(self.shape)]))
-  def assign(self, x:UOp): return UOp(Ops.ASSIGN, self.dtype, (self,x))
+  def assign(self, x:UOp): return UOp(Ops.ASSIGN, dtypes.void, (self,x))
   def reduce(self, *src:UOp, **kwargs): return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+src, **kwargs)
   def contiguous(self): return self.alu(Ops.CONTIGUOUS)
   def contiguous_backward(self): return self.alu(Ops.CONTIGUOUS_BACKWARD)
