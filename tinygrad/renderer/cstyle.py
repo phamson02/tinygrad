@@ -167,7 +167,7 @@ class CStyleLanguage(Renderer):
         r[u] = l
       else:
         if u.op in {Ops.RANGE, Ops.DEFINE_LOCAL, Ops.STORE} or u.dtype == dtypes.void:
-          if u.src[0].op is Ops.DEFINE_ACC: r[u] = r[u.src[0]]
+          if len(u.src) and u.src[0].op is Ops.DEFINE_ACC: r[u] = r[u.src[0]]
         else:
           l = f"{self.render_dtype(u.dtype)} {r[u]} = {l}" + (";" if u.op is not Ops.SPECIAL else "")
         kernel.append("  "*depth + l)
