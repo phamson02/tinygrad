@@ -47,7 +47,7 @@ class PythonProgram:
         if getenv("TRACE"): print(i, uop, dtype, arg, inp, dtp)
         if uop is Ops.STORE:
           assert len(inp) == 2, "expected store is ([(memory, offset, gate)], [value])"
-          if self.uops[idp[0]][0] is Ops.DEFINE_ACC:
+          if self.uops[idp[0]][0] is Ops.DEFINE_REG:
             for j in range(len(inp[0])): inp[0][j] = inp[1][j]
             ul[i] = inp[0]
             continue

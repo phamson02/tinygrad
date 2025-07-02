@@ -9,7 +9,7 @@ from tinygrad.codegen.devectorizer import no_vectorized_alu
 
 base_rewrite = PatternMatcher([
   (UPat(Ops.DEFINE_REG, name="x"), lambda ctx,x: ctx[x.src[0]]),
-  (UPat(Ops.STORE, src=(UPat(Ops.DEFINE_ACC, name="dst"), UPat.var("val")), allow_any_len=True),
+  (UPat(Ops.STORE, src=(UPat(Ops.DEFINE_REG, name="dst"), UPat.var("val")), allow_any_len=True),
    lambda ctx,dst,val: f"{ctx[dst]} = {ctx[val]};"), 
   (UPat(Ops.IF, name="x"), lambda ctx,x: f"if ({ctx[x.src[0]]}) {{"),
   (UPat((Ops.ENDIF, Ops.ENDRANGE)), lambda ctx: "}"),
@@ -167,7 +167,7 @@ class CStyleLanguage(Renderer):
         r[u] = l
       else:
         if u.op in {Ops.RANGE, Ops.DEFINE_LOCAL, Ops.STORE} or u.dtype == dtypes.void:
-          if len(u.src) and u.src[0].op is Ops.DEFINE_ACC: r[u] = r[u.src[0]]
+          if len(u.src) and u.src[0].op is Ops.DEFINE_REG: r[u] = r[u.src[0]]
         else:
           l = f"{self.render_dtype(u.dtype)} {r[u]} = {l}" + (";" if u.op is not Ops.SPECIAL else "")
         kernel.append("  "*depth + l)

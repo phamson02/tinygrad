@@ -85,9 +85,9 @@ sym = symbolic_simple+PatternMatcher([
   (UPat((Ops.BITCAST, Ops.CONTIGUOUS), src=(UPat.var("x"),), name="t"), lambda x,t: UOp(Ops.BUFFER_VIEW, t.dtype, (x.base,),
     (t.size, x.st.views[0].offset)).reshape(t.shape) if isinstance(x.device, str) and x.device.startswith("DISK") else None),
   # double ASSIGN to same target is one ASSIGN
-  (UPat(Ops.STORE, src=(UPat.var("t"), UPat(Ops.STORE, src=(UPat.var("t"), UPat.var("x"))))), lambda x,t: t.assign(x.contiguous())),
+  (UPat(Ops.STORE, src=(UPat.var("t"), UPat(Ops.STORE, src=(UPat.var("t"), UPat.var("x"))))), lambda x,t: t.assign(x.contiguous()) if t.op is Ops.DEFINE_REG else None),
   # ASSIGN to unrealized replaces the UOp
-  (UPat(Ops.STORE, src=(UPat.var("t"), UPat.var("x"))), lambda x,t: x.contiguous() if t.base.op not in {Ops.BUFFER, Ops.BUFFER_VIEW} and
+  (UPat(Ops.STORE, src=(UPat.var("t"), UPat.var("x"))), lambda x,t: x.contiguous() if t.op is Ops.DEFINE_REG and t.base.op not in {Ops.BUFFER, Ops.BUFFER_VIEW} and
    not (t.base.op is Ops.MSTACK and all(x.op is Ops.BUFFER for x in t.base.src)) else None),
   # put CAST to smaller dtype before EXPAND
   (UPat(Ops.CAST, name="cast", src=(UPat(Ops.VIEW, name="vm"),)), lambda cast,vm: vm.base.cast(cast.dtype).view(vm.st)
@@ -133,7 +133,7 @@ def append_to_kernel(x:UOp):
       new_srcs.extend(s.src)
       # NOTE: because const and device are shared UOps they don't change metadata
       # NOTE: if it's a reshape after ASSIGN we're not fusing that parent kernel
-      if s.base.op not in {Ops.CONST, Ops.DEVICE} and (not (s.op is Ops.RESHAPE and s.base.op is Ops.STORE)) and (m:=s.metadata): metadata += m
+      if s.base.op not in {Ops.CONST, Ops.DEVICE} and (not (s.op is Ops.RESHAPE and s.base.op is Ops.STORE and s.base.src and s.base.src[0] is Ops.DEFINE_REG)) and (m:=s.metadata): metadata += m
   if (new_src:=tuple(dedup(new_srcs))) != x.src: return x.replace(src=new_src, arg=Kernel(x.arg.ast, tuple(dedup(metadata))))
 
 create_kernels = PatternMatcher([
@@ -254,8 +254,8 @@ add_buffer_ops = PatternMatcher([
   (UPat(Ops.BUFFER, name="x"), lambda ctx,x: UOp.load(UOp(Ops.DEFINE_GLOBAL, x.dtype.ptr(x.size), (), ctx.index(x)).view(x.st),)),
   # STORE (except for meta ops)
   (UPat(Ops.SINK, src=(UPat(GroupOp.Meta, name="x"),)), lambda x:x),
-  (UPat(Ops.SINK, src=UPat(GroupOp.All-{Ops.STORE}), name="sink"), lambda ctx,sink:
-   UOp.sink(*[UOp.store(UOp(Ops.DEFINE_GLOBAL, (s:=x.base).dtype.ptr(ctx[i].size), (), i).view(s.st), s) for i,x in enumerate(sink.src)])),
+  (UPat(Ops.SINK, src=UPat(GroupOp.All, dtype=tuple(set(dtypes.all) - {dtypes.void})), name="sink"), lambda ctx,sink:
+   UOp.sink(*[UOp.store(UOp(Ops.DEFINE_GLOBAL, (s:=x.base).dtype.ptr(ctx[i].size), (), i).view(s.st), s) if (x.op is Ops.STORE and x.dtype is not dtypes.void) or (x.op is not Ops.STORE) else x for i,x in enumerate(sink.src)])),
   # passthrough ASSIGN
   (UPat(Ops.STORE, name="x"), lambda x: x.src[1] if x.dtype is not dtypes.void else None),
   # VALID
@@ -290,8 +290,7 @@ replace_globals = PatternMatcher([
 ])
 
 def fix_kernel_ast(k:UOp) -> UOp|None:
-  if k.arg.ast.op in GroupOp.Meta or all(s.op is Ops.STORE for s in k.arg.ast.src): return None
-  # replace global memory ops with the BUFFER they write to
+  if k.arg.ast.op in GroupOp.Meta or all(s.op is Ops.STORE and s.dtype is dtypes.void for s in k.arg.ast.src): return None
   ast = graph_rewrite(k.arg.ast, replace_globals, bottom_up=True, name="replace globals")
   # push views to edges
   ast = graph_rewrite(graph_rewrite(ast, view_left, name="Main View Left"), view_right, name="Main View Right")
@@ -458,7 +457,7 @@ def get_kernelize_map(sink:UOp) -> dict[UOp, UOp]:
     for s in u.src[1].src:
       # TODO: this is probably broken for MSELECT/MSTACK
       if s.op is not Ops.BUFFER or s is u.buf_uop or (a:=kernel_assign.get(s)) is None: continue
-      if any(x.op is Ops.STORE and x.buf_uop is s for x in u.toposort()):
+      if any(x.op is Ops.STORE and x.src[0].op is Ops.DEFINE_REG and x.buf_uop is s for x in u.toposort()):
         raise RuntimeError(f"cycle detected in graph, kernel for {u.buf_uop} must either depend on ASSIGN or BUFFER")
       assign_rep[a] = kernel_assign[s] = a.replace(src=a.src+(u,))
   if assign_rep:
