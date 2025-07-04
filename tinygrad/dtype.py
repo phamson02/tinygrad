@@ -71,6 +71,7 @@ class PtrDType(DType):
   def __repr__(self):
     return f"{self.base.__repr__()}.ptr({self.size}{', local=True' if self.local else ''})" + (f'.vec({self.v})' if self.v != 1 else '')
   def __eq__(self, value: object) -> bool:
+    if type(self) is not type(value): return NotImplemented
     return isinstance(value, PtrDType) and self.local == value.local
   def __hash__(self):
     return hash(self.local)
