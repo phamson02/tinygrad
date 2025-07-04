@@ -6,7 +6,7 @@ from tinygrad.uop.ops import UOp, Ops, Variable, sym_infer
 from tinygrad.device import Device, Buffer, Compiler
 from tinygrad.helpers import prod, flatten, DEBUG, CACHELEVEL, diskcache_get, diskcache_put, getenv, Context, colored, time_to_str
 from tinygrad.helpers import IGNORE_BEAM_CACHE, TC_SEARCH_OVER_SHAPE
-from tinygrad.dtype import ImageDType, PtrDType
+from tinygrad.dtype import ImageDType, PtrDType, ptrdtypes
 from tinygrad.opt.kernel import Kernel, Opt, OptOps, KernelOptError
 from tinygrad.tensor import Tensor
 from tinygrad.engine.realize import CompiledRunner
@@ -94,7 +94,7 @@ def _ensure_buffer_alloc(bufs:list[Buffer]) -> list[Buffer]: return [buf.ensure_
 def bufs_from_lin(lin:Kernel, allocate:bool=True) -> list[Buffer]:
   bufsts: defaultdict[int, list[UOp]] = defaultdict(list)
   for x in lin.bufs:
-    if x.src[0].base.op is Ops.DEFINE_MEM: bufsts[x.src[0].base.arg].append(x)
+    if x.src[0].base.op is Ops.DEFINE_MEM and x.src[0].base.dtype == ptrdtypes.GLOBAL: bufsts[x.src[0].base.arg].append(x)
   # TODO: Nones are staying in here if buffers are optimized out!
   # TODO: add a test for this
   rawbufs: list[Optional[Buffer]] = [None]*(max(bufsts)+1)

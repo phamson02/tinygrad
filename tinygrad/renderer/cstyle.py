@@ -3,7 +3,7 @@ import os, math, sys
 from collections import defaultdict, Counter
 from tinygrad.uop.ops import GroupOp, Ops, UOp, PatternMatcher, UPat
 from tinygrad.helpers import strip_parens, getenv, prod, dedup, AMX
-from tinygrad.dtype import ImageDType, dtypes, DType, PtrDType
+from tinygrad.dtype import ImageDType, dtypes, DType, PtrDType, ptrdtypes
 from tinygrad.renderer import Renderer, TensorCore
 from tinygrad.codegen.devectorizer import no_vectorized_alu
 
@@ -23,7 +23,7 @@ base_rewrite = PatternMatcher([
     f"__builtin_convertvector({ctx[x.src[0]]}, {ctx.render_dtype(x.dtype)})" if x.dtype.count > 1 and not isinstance(x.dtype, PtrDType) else None),
   (UPat(Ops.CAST, name="x"), lambda ctx,x: f"({ctx.render_cast(x.dtype, ctx[x.src[0]])})"),
   (UPat(Ops.BITCAST, name="x"), lambda ctx,x: f"(*(({ctx.buffer_prefix}{ctx.render_dtype(x.dtype)}*)&{ctx[x.src[0]]}))"),
-  (UPat(Ops.DEFINE_MEM, name="x"), lambda ctx,x: f"{ctx.smem_align}{ctx.smem_prefix}{ctx.render_dtype(x.dtype.base)} {ctx[x]}[{x.dtype.size}];"),
+  (UPat(Ops.DEFINE_MEM, dtype=ptrdtypes.LOCAL, name="x"), lambda ctx,x: f"{ctx.smem_align}{ctx.smem_prefix}{ctx.render_dtype(x.dtype.base)} {ctx[x]}[{x.dtype.size}];"),
   (UPat(Ops.BARRIER), lambda ctx: ctx.barrier),
   (UPat(Ops.NOOP, name="x"), lambda ctx,x: ctx[x.src[0]]),
   (UPat(Ops.SPECIAL, name="x"), lambda ctx,x: f"{ctx.code_for_workitem[x.arg[0][0]](x.arg[0][-1])}; /* {x.arg[1]} */"),
