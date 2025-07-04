@@ -31,7 +31,7 @@ class Ops(FastEnum):
   VALID = auto()
 
   # TODO: unify these ops into the levels of the memory hierarchy. depends on ASSIGN is STORE
-  DEFINE_GLOBAL = auto(); DEFINE_LOCAL = auto(); DEFINE_REG = auto() # noqa: E702
+  DEFINE_MEM = auto(); DEFINE_GLOBAL = auto(); DEFINE_LOCAL = auto(); DEFINE_REG = auto() # noqa: E702
 
   # this is for symbolic shapes
   DEFINE_VAR = auto(); BIND = auto() # noqa: E702

@@ -3,6 +3,7 @@ import pathlib
 import numpy as np
 from dataclasses import replace
 from tinygrad import Tensor, Device, Context
+from tinygrad.dtype import PtrDType
 from tinygrad.helpers import getenv
 from tinygrad.opt.kernel import Kernel, Opt, OptOps
 from tinygrad.engine.realize import CompiledRunner, ExecItem
@@ -22,7 +23,7 @@ run_count = 5
 
 from tinygrad.shape.shapetracker import ShapeTracker, View
 def transform_load(ctx:tuple[Kernel, set[UOp]], x:UOp):
-  if x.src[0].op is not Ops.DEFINE_GLOBAL: return None
+  if x.src[0].op is not Ops.DEFINE_MEM and (isinstance(x.src[0].dtype, PtrDType) and not x.src[0].dtype.local): return None
   if x in ctx[1]: return None
   print(ctx[0].colored_shape())
   ctx[1].add(x)
@@ -45,7 +46,7 @@ def transform_load(ctx:tuple[Kernel, set[UOp]], x:UOp):
   #local_st = ShapeTracker(views=(View.create((1,1,LN,LN,1,1)),))
   load_st = local_st.permute(perm)
   input_st = input_st.permute(perm)
-  lcl = UOp(Ops.DEFINE_LOCAL, x.dtype.ptr(local_st.real_size(), local=True), (), f"temp{x.src[0].arg}")
+  lcl = UOp(Ops.DEFINE_MEM, x.dtype.ptr(local_st.real_size(), local=True), (), f"temp{x.src[0].arg}")
   global_load = x.replace(src=(x.src[0], input_st.to_uop()))
   ret = UOp(Ops.STORE, src=(lcl, local_st.to_uop(), global_load))
   return UOp(Ops.LOAD, x.dtype, src=(lcl, load_st.to_uop(), ret))

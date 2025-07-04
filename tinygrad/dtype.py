@@ -70,6 +70,11 @@ class PtrDType(DType):
   def vcount(self): return self.v
   def __repr__(self):
     return f"{self.base.__repr__()}.ptr({self.size}{', local=True' if self.local else ''})" + (f'.vec({self.v})' if self.v != 1 else '')
+  
+def is_ptr(dtype:DType, local:Optional[bool]=None) -> bool:
+  if not isinstance(dtype, PtrDType): return False
+  if local is None: return True
+  return dtype.local == local
 
 @dataclass(frozen=True, eq=False)
 class ImageDType(PtrDType):

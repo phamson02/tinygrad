@@ -168,10 +168,14 @@ class LLVMRenderer(Renderer):
       if u.op is Ops.SINK:
         if u.arg is not None: name = u.arg.function_name
         continue
-      if u.op in (Ops.DEFINE_GLOBAL, Ops.DEFINE_VAR):
-        r[u] = f"%data{u.arg}" if u.op is Ops.DEFINE_GLOBAL else f"%{u.arg[0]}"
+      if u.op is Ops.DEFINE_VAR:
+        r[u] = f"%{u.arg[0]}"
         args.append((r[u], u.dtype))
-      elif u.op == Ops.DEFINE_LOCAL:
+      elif u.op is Ops.DEFINE_MEM:
+        if not cast(PtrDType, u.dtype).local:
+          r[u] = f"%data{u.arg}"
+          args.append((r[u], u.dtype))
+          continue
         r[u] = f"%local_{u.arg}"
         assert isinstance(u.dtype, PtrDType)
         if self.device == "LLVM": kernel.append(f"  {r[u]} = alloca [{u.dtype.size} x {ldt(u.dtype)}], align 16")
