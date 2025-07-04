@@ -237,7 +237,7 @@ def finalize(sink:UOp) -> UOp:
     raise RuntimeError("linearize failure")
 
   # place the early things
-  lst = sorted(dedup(sink.src), key=lambda x: x.tuplize) + list(sink.arg.lst)
+  lst = sorted(dedup(sink.src), key=lambda x: x.tuplize[0]) + list(sink.arg.lst)
   return UOp(Ops.BLOCKFINAL, arg=BasicBlock(tuple(lst)))
 
 pm_finalize = PatternMatcher([(UPat(Ops.BLOCK, name="sink"), finalize)])
