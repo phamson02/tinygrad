@@ -172,7 +172,7 @@ class LLVMRenderer(Renderer):
         r[u] = f"%{u.arg[0]}"
         args.append((r[u], u.dtype))
       elif u.op is Ops.DEFINE_MEM:
-        if not u.dtype.local:
+        if not cast(PtrDType, u.dtype).local:
           r[u] = f"%data{u.arg}"
           args.append((r[u], u.dtype))
           continue

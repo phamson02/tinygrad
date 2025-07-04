@@ -1,4 +1,4 @@
-from typing import cast, Callable
+from typing import cast, Callable, cast
 import struct
 from collections import defaultdict
 from tinygrad.uop.ops import Ops, UOp, PatternMatcher, UPat, GroupOp
@@ -59,7 +59,7 @@ ptx_matcher = PatternMatcher([
   (UPat.var("x") >> UPat.var("y"), lambda x,y: UOp(Ops.SHR, x.dtype, (x,y.cast(dtypes.uint))) if y.dtype != dtypes.uint else None),
 ])
 
-def mem_type(x: UOp): return 'shared' if any(_x.op is Ops.DEFINE_MEM and x.dtype.local for _x in x.src[0].toposort()) else 'global'
+def mem_type(x: UOp): return 'shared' if any(_x.op is Ops.DEFINE_MEM and cast(PtrDType, x.dtype).local for _x in x.src[0].toposort()) else 'global'
 
 def render_wmma(ctx: "PTXRenderer", wmma: UOp):
   assert ctx.wmma_r, "registry values for wmma must be populated"
@@ -193,7 +193,7 @@ class PTXRenderer(Renderer):
       elif u.op is Ops.LOAD:
         assert u.src[0].dtype == dtypes.int64, "load isn't int64"
         r[u] = [ssa('val', dtype=self.types[u.dtype.scalar()]) for _ in range(u.dtype.count)] if u.dtype.count > 1 else ssa('val', u)
-      elif u.op is Ops.DEFINE_MEM and (not u.dtype.local): bufs.append((f"data{u.arg}", u.dtype))
+      elif u.op is Ops.DEFINE_MEM and (not cast(PtrDType, u.dtype).local): bufs.append((f"data{u.arg}", u.dtype))
       elif u.op is Ops.WMMA:
         # registers for packing/unpacking input and acc
         self.wmma_r = [[ssa("wmma_in", dtype="b32") for _ in range(0, len(r[u.src[0]]), 4 // u.arg[2].itemsize)],
@@ -202,7 +202,7 @@ class PTXRenderer(Renderer):
         r[u] = [ssa("wmma", dtype=self.types[u.dtype.scalar()]) for _ in range(u.dtype.count)]
       prefix, dtype = {Ops.CAST: ("cast", None), Ops.BITCAST: ("cast", None), Ops.ENDRANGE: ("pred", "pred"), Ops.RANGE: ("ridx", None),
         Ops.DEFINE_REG: ("acc", None), Ops.DEFINE_VAR: ("dat", None), Ops.CONST: ("const", None),
-        Ops.DEFINE_MEM:("local",self.types[dtypes.ulong]) if u.dtype.local else ("dat", self.types[dtypes.ulong]),
+        Ops.DEFINE_MEM:("local",self.types[dtypes.ulong]) if cast(PtrDType, u.dtype).local else ("dat", self.types[dtypes.ulong]),
         **{op: ("alu", None) for op in GroupOp.ALU}}.get(u.op, (None, None))
       if prefix: r[u] = ssa(prefix, u, dtype)
 
