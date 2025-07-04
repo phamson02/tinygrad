@@ -70,11 +70,12 @@ class PtrDType(DType):
   def vcount(self): return self.v
   def __repr__(self):
     return f"{self.base.__repr__()}.ptr({self.size}{', local=True' if self.local else ''})" + (f'.vec({self.v})' if self.v != 1 else '')
-  def __eq__(self, value: object) -> bool:
-    if type(self) is not type(value): return NotImplemented
-    return isinstance(value, PtrDType) and self.local == value.local
-  def __hash__(self):
-    return hash(self.local)
+  
+def is_ptr(dtype:DType, local:Optional[bool]=None) -> bool:
+  if not isinstance(dtype, PtrDType): return False
+  if local is None: return True
+  return dtype.local == local
+
 @dataclass(frozen=True, eq=False)
 class ImageDType(PtrDType):
   shape: tuple[int, ...] = ()   # shape of the Image
@@ -166,10 +167,6 @@ class dtypes:
   sints = (int8, int16, int32, int64)
   ints = uints + sints
   all = floats + ints + (bool,)
-
-class ptrdtypes:
-  GLOBAL : Final[PtrDType] = dtypes.void.ptr(local=False)
-  LOCAL : Final[PtrDType] = dtypes.void.ptr(local=True)
 
 if (env_default_float := getenv("DEFAULT_FLOAT", "")):
   dtypes.default_float = getattr(dtypes, env_default_float.lower())
