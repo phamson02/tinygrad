@@ -29,7 +29,7 @@ def get_index(ast:UOp) -> IndexContext:
   # late indexes (group for reduce)
   # if there's no reduce, this is first_upcasted. assumes reduces are at the end
   first_reduce = min([first_upcasted]+flatten(x.axis_arg for x in ast.toposort() if x.op is Ops.REDUCE_AXIS))
-  local_loads = [x for x in ast.toposort() if x.op is Ops.LOAD and x.src[0].base.op is Ops.DEFINE_LOCAL]
+  local_loads = [x for x in ast.toposort() if x.op is Ops.LOAD and x.src[0].base.op is Ops.DEFINE_MEM]
   # NOTE: sum up the reduced axes looking across all local loads, yields the number of grouped reduces
   group_for_reduces = sum([any(l.st_arg.shape[i]!=ast.src[0].st_arg.shape[i] for l in local_loads) for i in range(first_reduce,first_upcasted)])
   ridxs = idxs[:]
@@ -51,8 +51,8 @@ def lower_reduce_axis(ctx: IndexContext, x: UOp):
   return UOp(Ops.REDUCE, x.dtype, (ret,)+tuple(reduce_range), x.arg[0])
 
 def lower_load(ctx: IndexContext, x: UOp, buf: UOp):
-  idx, valid = x.st_arg.to_indexed_uops(ctx.ridxs if buf.op is Ops.DEFINE_LOCAL else ctx.idxs)
-  barrier = (UOp(Ops.BARRIER, dtypes.void, (x.src[1],)),) if buf.op is Ops.DEFINE_LOCAL else ()
+  idx, valid = x.st_arg.to_indexed_uops(ctx.ridxs if buf.op is Ops.DEFINE_MEM else ctx.idxs)
+  barrier = (UOp(Ops.BARRIER, dtypes.void, (x.src[1],)),) if buf.op is Ops.DEFINE_MEM else ()
   return UOp(Ops.LOAD, x.dtype, (buf.index(idx, valid),) + barrier)
 
 def lower_store(ctx: IndexContext, x: UOp, buf: UOp):

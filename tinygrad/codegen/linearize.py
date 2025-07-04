@@ -94,7 +94,7 @@ class BlockContext:
       if u.op in {Ops.RANGE, Ops.IF}: ctx.child_ctxs[u] = _sort_ctx(ctx.block_ctxs[u] + (u,))
       elif u.op is Ops.STORE:
         # ugh, deal with non-reduce locals. probably wrong
-        if any(x.op is Ops.DEFINE_LOCAL for x in u.src[0].toposort()):
+        if any(x.op is Ops.DEFINE_MEM for x in u.src[0].toposort()):
           idx_context, store_context = ctx.last_ctx(u.src[0]), ctx.last_ctx(u.src[1])
           ctx.child_ctxs[u] = tuple([y for y in store_context if y not in idx_context and y.op is Ops.RANGE])
         else: ctx.child_ctxs[u] = ()
@@ -105,7 +105,7 @@ class BlockContext:
 
 # ***** make blocks *****
 
-DONT_PLACE_IN_BLOCK = {Ops.DEFINE_GLOBAL, Ops.DEFINE_LOCAL, Ops.DEFINE_VAR, Ops.SPECIAL, Ops.CONST}
+DONT_PLACE_IN_BLOCK = {Ops.DEFINE_MEM, Ops.DEFINE_VAR, Ops.SPECIAL, Ops.CONST}
 
 def add_blockends(base_block:UOp, new_ctx:tuple[UOp, ...], current_ctx:tuple[UOp, ...], cnt:int=1) -> UOp:
   ends_to_add = [z for z in new_ctx if z not in current_ctx]
