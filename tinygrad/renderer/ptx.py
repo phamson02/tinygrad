@@ -1,4 +1,4 @@
-from typing import cast, Callable, cast
+from typing import cast, Callable
 import struct
 from collections import defaultdict
 from tinygrad.uop.ops import Ops, UOp, PatternMatcher, UPat, GroupOp

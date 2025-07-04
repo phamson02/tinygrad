@@ -33,8 +33,8 @@ def uop(uops:list[UOp], uop:Ops, dtype:Optional[DType], src:tuple[UOp, ...], arg
 def _test_single_value(vals, op, dts):
   uops = []
   output_dtype = dtypes.bool if op in (Ops.CMPLT, Ops.CMPNE) else dts[-1]
-  buf_store = uop(uops, Ops.DEFINE_GLOBAL, output_dtype.ptr(), (), 0)
-  buf_loads = [uop(uops, Ops.DEFINE_GLOBAL, dtype.ptr(), (), i+1) for i,dtype in enumerate(dts)]
+  buf_store = uop(uops, Ops.DEFINE_MEM, output_dtype.ptr(), (), 0)
+  buf_loads = [uop(uops, Ops.DEFINE_MEM, dtype.ptr(), (), i+1) for i,dtype in enumerate(dts)]
   loads = (uop(uops, Ops.LOAD, dtype, [buf_loads[i].index(uop(uops, Ops.CONST, dtypes.int32, (), 0))]) for i, dtype in enumerate(dts))
   alu = uop(uops, op, output_dtype, loads)
   out = uop(uops, Ops.STORE, dtypes.void, (buf_store.index(uop(uops, Ops.CONST, dtypes.int32, (), 0)), alu))
@@ -49,7 +49,7 @@ def _test_single_value(vals, op, dts):
 def _test_single_value_const(vals, op, dts):
   uops = []
   output_dtype = dtypes.bool if op in (Ops.CMPLT, Ops.CMPNE) else dts[-1]
-  buf_store = uop(uops, Ops.DEFINE_GLOBAL, output_dtype.ptr(), (), 0)
+  buf_store = uop(uops, Ops.DEFINE_MEM, output_dtype.ptr(), (), 0)
   loads = (uop(uops, Ops.CONST, dtype, [], a) for a,dtype in zip(vals, dts))
   alu = uop(uops, op, output_dtype, loads)
   out = uop(uops, Ops.STORE, dtypes.void, (buf_store.index(uop(uops, Ops.CONST, dtypes.int32, (), 0)), alu))
@@ -62,7 +62,7 @@ def _test_single_value_const(vals, op, dts):
 
 def _test_uops_result(output_dtype, uops, res):
   # uops = []
-  buf_store = uop(uops, Ops.DEFINE_GLOBAL, output_dtype.ptr(), (), 0)
+  buf_store = uop(uops, Ops.DEFINE_MEM, output_dtype.ptr(), (), 0)
   # res = output_fn(uops)
   out = uop(uops, Ops.STORE, dtypes.void, (buf_store.index(uop(uops, Ops.CONST, dtypes.int32, (), 0)), res))
   buf = Buffer(Device.DEFAULT, 1, output_dtype).allocate()
@@ -244,7 +244,7 @@ class TestConstantFolding(unittest.TestCase):
 
 class TestGatedStoreRewrite(unittest.TestCase):
   def test_tiny_gate_store(self):
-    gmem = UOp(Ops.DEFINE_GLOBAL, dtypes.float.ptr(), (), 0)
+    gmem = UOp(Ops.DEFINE_MEM, dtypes.float.ptr(), (), 0)
     gidx0 = UOp(Ops.SPECIAL, dtypes.int, (), ('gidx0', 4))
     gate = gidx0<UOp.const(dtypes.int, 1)
     idx = UOp(Ops.INDEX, dtypes.float.ptr(), (gmem, gidx0 * UOp.const(dtypes.int, 2), gate))
@@ -260,8 +260,8 @@ class TestGatedStoreRewrite(unittest.TestCase):
     self.assertIs(gated_uops[-1].op, Ops.STORE)
 
   def test_gate_some_stores(self):
-    gmem0 = UOp(Ops.DEFINE_GLOBAL, dtypes.float.ptr(), (), 0)
-    gmem1 = UOp(Ops.DEFINE_GLOBAL, dtypes.float.ptr(), (), 1)
+    gmem0 = UOp(Ops.DEFINE_MEM, dtypes.float.ptr(), (), 0)
+    gmem1 = UOp(Ops.DEFINE_MEM, dtypes.float.ptr(), (), 1)
     gidx0 = UOp(Ops.SPECIAL, dtypes.int, (), ('gidx0', 4))
     idx = gidx0 * UOp.const(dtypes.int, 2)
     idx0 = UOp(Ops.INDEX, dtypes.float.ptr(), (gmem0, idx, gidx0<UOp.const(dtypes.int, 1)))
@@ -279,8 +279,8 @@ class TestGatedStoreRewrite(unittest.TestCase):
 
   # scaled down version of TestLinearizerDumb.test_unmerged_ifs
   def test_merge_ifs_alt(self):
-    gmem0 = UOp(Ops.DEFINE_GLOBAL, dtypes.float.ptr(), (), 0)
-    gmem1 = UOp(Ops.DEFINE_GLOBAL, dtypes.float.ptr(), (), 1)
+    gmem0 = UOp(Ops.DEFINE_MEM, dtypes.float.ptr(), (), 0)
+    gmem1 = UOp(Ops.DEFINE_MEM, dtypes.float.ptr(), (), 1)
     gidx0 = UOp(Ops.SPECIAL, dtypes.int, (), ('gidx0', 4))
     idx = gidx0*UOp.const(dtypes.int, 2)
     gate = gidx0<UOp.const(dtypes.int, 1)
@@ -304,7 +304,7 @@ class TestLocalAccess(unittest.TestCase):
   @unittest.skipUnless(Device[Device.DEFAULT].renderer.has_shared, "test requires shared memory")
   def test_local_basic(self):
     uops = []
-    smem = uop(uops, Ops.DEFINE_LOCAL, dtypes.float32.ptr(size=16, local=True), (), 'smem')
+    smem = uop(uops, Ops.DEFINE_MEM, dtypes.float32.ptr(size=16, local=True), (), 'smem')
     st = uop(uops, Ops.STORE, dtypes.void, (smem.index(uop(uops, Ops.CONST, dtypes.int32, (), 0)), uop(uops, Ops.CONST, dtypes.float32, (), 42.0)))
     barr = uop(uops, Ops.BARRIER, dtypes.void, (st,))
     sres = uop(uops, Ops.LOAD, dtypes.float32, (smem.index(uop(uops, Ops.CONST, dtypes.int32, (), 0)), barr))
@@ -314,7 +314,7 @@ class TestLocalAccess(unittest.TestCase):
   @unittest.skipUnless(Device.DEFAULT == "WEBGPU", "Test local access with packed data type")
   def test_local_packed(self):
     uops = []
-    smem = uop(uops, Ops.DEFINE_LOCAL, dtypes.uint8.ptr(size=16, local=True), (), 'smem')
+    smem = uop(uops, Ops.DEFINE_MEM, dtypes.uint8.ptr(size=16, local=True), (), 'smem')
     st = uop(uops, Ops.STORE, dtypes.void, (smem.index(uop(uops, Ops.CONST, dtypes.int32, (), 0)), uop(uops, Ops.CONST, dtypes.uint8, (), 42)))
     barr = uop(uops, Ops.BARRIER, dtypes.void, (st,))
     sres = uop(uops, Ops.LOAD, dtypes.uint8, (smem.index(uop(uops, Ops.CONST, dtypes.int32, (), 0)), barr))
@@ -326,7 +326,7 @@ class TestLocalAccess(unittest.TestCase):
     _dtypes = [dtypes.char, dtypes.uchar, dtypes.short, dtypes.ushort, dtypes.half]
     size = 16
     for dtype in _dtypes:
-      temp = UOp(Ops.DEFINE_LOCAL, dtype.ptr(size=size, local=True), (), 'smem')
+      temp = UOp(Ops.DEFINE_MEM, dtype.ptr(size=size, local=True), (), 'smem')
       uops = to_uops_list([temp], opts=Device[Device.DEFAULT].renderer)
       out = Device[Device.DEFAULT].renderer.render(uops)
       # half is supported in wgsl, so it doesn't have to be packed
@@ -337,7 +337,7 @@ class TestLocalAccess(unittest.TestCase):
   @unittest.skip("tinygrad doesn't support this behavior")
   def test_local_indirect(self):
     uops = []
-    smem = uop(uops, Ops.DEFINE_LOCAL, dtypes.int32.ptr(size=16, local=True), (), 'smem')
+    smem = uop(uops, Ops.DEFINE_MEM, dtypes.int32.ptr(size=16, local=True), (), 'smem')
     st1 = uop(uops, Ops.STORE, dtypes.void, (smem.index(uop(uops, Ops.CONST, dtypes.int32, (), 1)), uop(uops, Ops.CONST, dtypes.int32, (), 2)))
     st2 = uop(uops, Ops.STORE, dtypes.void, (smem.index(uop(uops, Ops.CONST, dtypes.int32, (), 2)), uop(uops, Ops.CONST, dtypes.int32, (), 42)))
     barr = uop(uops, Ops.BARRIER, dtypes.void, (st1,st2))
@@ -348,7 +348,7 @@ class TestLocalAccess(unittest.TestCase):
 @unittest.skipUnless(getenv("PTX"), "This only tests assembly backends")
 class TestAssembly(unittest.TestCase):
   def test_bitshift_left(self):
-    g1 = UOp(Ops.DEFINE_GLOBAL, dtypes.int32.ptr(), (), 0)
+    g1 = UOp(Ops.DEFINE_MEM, dtypes.int32.ptr(), (), 0)
     c1 = UOp(Ops.CONST, dtypes.int, (), 2)
     c2 = UOp(Ops.CONST, dtypes.int, (), 3)
     l1 = UOp(Ops.LOAD, dtypes.int, (g1.index(c1),))
@@ -362,7 +362,7 @@ class TestAssembly(unittest.TestCase):
 
   def test_division_power_of_two(self):
     for dt in (dtypes.int32, dtypes.uint32):
-      g = UOp(Ops.DEFINE_GLOBAL, dt.ptr(), (), 0)
+      g = UOp(Ops.DEFINE_MEM, dt.ptr(), (), 0)
       c = UOp(Ops.CONST, dt, (), 2)
       l = UOp(Ops.LOAD, dt, (g.index(c),))
       a = UOp(Ops.IDIV, dt, (l, c))
@@ -373,7 +373,7 @@ class TestAssembly(unittest.TestCase):
       self.assertNotIn(Ops.IDIV, ops, f"For dtype={dt} divison by power of two did not simplify to shift")
 
   def test_fast_idiv_and_mod(self):
-    g = UOp(Ops.DEFINE_GLOBAL, dtypes.uint32.ptr(), (), 0)
+    g = UOp(Ops.DEFINE_MEM, dtypes.uint32.ptr(), (), 0)
     c = UOp(Ops.CONST, dtypes.uint, (), 3)
     l = UOp(Ops.LOAD, dtypes.uint, (g.index(c),))
     a = UOp(Ops.IDIV, dtypes.uint, (l, c))
@@ -393,7 +393,7 @@ class TestAssembly(unittest.TestCase):
   @unittest.expectedFailure
   def test_fast_idiv_overflow(self):
     # This will be possible with a slightly different method for fast_idiv
-    g = UOp(Ops.DEFINE_GLOBAL, dtypes.uint32.ptr(), (), 0)
+    g = UOp(Ops.DEFINE_MEM, dtypes.uint32.ptr(), (), 0)
     c = UOp(Ops.CONST, dtypes.uint, (), 7)
     l = UOp(Ops.LOAD, dtypes.uint, (g.index(c),))
     a = UOp(Ops.IDIV, dtypes.uint, (l, c))
@@ -443,7 +443,7 @@ class TestUOpMethod(unittest.TestCase):
     self.assertEqual((gidx0*3+1).const_factor(), 1)
 
   def test_replace(self):
-    x = UOp(Ops.DEFINE_GLOBAL, dtypes.int.ptr(), (), 0)
+    x = UOp(Ops.DEFINE_MEM, dtypes.int.ptr(), (), 0)
     self.assertIs(x.replace(arg=None).arg, None)
     with self.assertRaises(AssertionError): x.replace(field="a")
 
@@ -480,7 +480,7 @@ class TestIndexingOrdering(unittest.TestCase):
   # NOTE: these tests skip type_verify since they add dtype to STORE
   @unittest.expectedFailure
   def test_simple_order(self):
-    buf = UOp(Ops.DEFINE_GLOBAL, dtypes.float.ptr(), (), 0)
+    buf = UOp(Ops.DEFINE_MEM, dtypes.float.ptr(), (), 0)
     st0 = UOp(Ops.STORE, dtypes.float.vec(4), (buf, UOp.const(dtypes.int, 0), UOp.const(dtypes.float.vec(4), 42)))
     st1 = UOp(Ops.STORE, dtypes.float, (buf, UOp.const(dtypes.int, 4), UOp.const(dtypes.float, 10)))
     uops = to_uops_list([st1, st0], skip_check=True)
@@ -489,8 +489,8 @@ class TestIndexingOrdering(unittest.TestCase):
 
   @unittest.expectedFailure
   def test_ordering_multi_output(self):
-    buf0 = UOp(Ops.DEFINE_GLOBAL, dtypes.float.ptr(), (), 0)
-    buf1 = UOp(Ops.DEFINE_GLOBAL, dtypes.float.ptr(), (), 1)
+    buf0 = UOp(Ops.DEFINE_MEM, dtypes.float.ptr(), (), 0)
+    buf1 = UOp(Ops.DEFINE_MEM, dtypes.float.ptr(), (), 1)
     st0_0 = UOp(Ops.STORE, dtypes.float.vec(4), (buf0, UOp.const(dtypes.int, 0), UOp.const(dtypes.float.vec(4), 42)))
     st1_0 = UOp(Ops.STORE, dtypes.float, (buf0, UOp.const(dtypes.int, 4), UOp.const(dtypes.float, 10)))
     st0_1 = UOp(Ops.STORE, dtypes.float.vec(4), (buf1, UOp.const(dtypes.int, 0), UOp.const(dtypes.float.vec(4), 42)))
@@ -507,7 +507,7 @@ class TestIndexingOrdering(unittest.TestCase):
     assert stores[2].src[1] < stores[3].src[1], f"stored at idx {stores[1].src[1].arg} AFTER {stores[0].src[1].arg}"
 
   def test_simple_order_with_special(self):
-    buf = UOp(Ops.DEFINE_GLOBAL, dtypes.float.ptr(), (), 0)
+    buf = UOp(Ops.DEFINE_MEM, dtypes.float.ptr(), (), 0)
     gidx0 = UOp(Ops.SPECIAL, dtypes.int, (), ('gidx0', 4))
     st0 = UOp(Ops.STORE, dtypes.float.vec(4), (buf, gidx0+UOp.const(dtypes.int, 0), UOp.const(dtypes.float.vec(4), 42)))
     st1 = UOp(Ops.STORE, dtypes.float, (buf, UOp.const(dtypes.int, 4), UOp.const(dtypes.float, 10)))

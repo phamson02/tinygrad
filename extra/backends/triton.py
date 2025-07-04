@@ -96,7 +96,7 @@ def uops_to_triton(function_name:str, uops:List[UOp]):
     elif uop == Ops.STORE:
       assert not isinstance(dtype, ImageDType), "unimplemented: image store"
       kk(f"{'if '+r[vin[3]]+': ' if len(vin)>3 else ''}tl.store({r[vin[0]]} + {r[vin[1]]}, {r[vin[2]].replace('//', '/')}, mask = {render_valid(valid)}) ")
-    elif uop == Ops.DEFINE_GLOBAL:
+    elif uop == Ops.DEFINE_MEM and (not dtype.local):
       bufs.append(args)
       signatures.append("*" if isinstance(dtype, PtrDType) else "" +  signature_dtypes[dtype])
       r[u] = args

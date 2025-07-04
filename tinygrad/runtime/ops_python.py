@@ -65,7 +65,7 @@ class PythonProgram:
         if uop is Ops.DEFINE_MEM:
           assert dtype.fmt is not None and isinstance(dtype, PtrDType)
           if TYPE_CHECKING or sys.version_info < (3, 12): assert dtype.fmt != "e"
-          buf = memoryview(bytearray(dtype.size*dtype.itemsize)) if arg[0] == 1 else pbufs.pop(0)
+          buf = memoryview(bytearray(dtype.size*dtype.itemsize)) if dtype.local else pbufs.pop(0)
           ul[i] = [buf.cast(dtype.fmt)] * warp_size
         elif uop is Ops.DEFINE_VAR:
           ul[i] = [pvals.pop(0)] * warp_size

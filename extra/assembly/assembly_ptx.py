@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, cast
 import struct
 from tinygrad.codegen.assembly import uops_to_asmstyle, AssemblyLanguage
 from tinygrad.opt.kernel import Ops, UOp
@@ -39,7 +39,7 @@ def specialize_to_ptx(lang, function_name):
   for uop, out, vin, arg in lang.ins:
     if uop == Ops.ENDLOOP:
       ins.append("bar.sync 0;")
-    elif uop == Ops.DEFINE_LOCAL:
+    elif uop == Ops.DEFINE_MEM:
       ins.append(f".shared .align 4 .b8 {arg[0]}[{arg[1]*4}];")
     elif uop == Ops.SPECIAL:
       if arg.startswith('data'):
