@@ -90,7 +90,7 @@ class TestLinearizer(unittest.TestCase):
 
   def test_multioutput(self):
     dtype, st = dtypes.int, ShapeTracker.from_shape((8,))
-    g0, g1, g2, g3 = [UOp(Ops.DEFINE_MEMtype.ptr(), arg=i) for i in range(4)]
+    g0, g1, g2, g3 = [UOp(Ops.DEFINE_MEM, dtype.ptr(), arg=i) for i in range(4)]
     a = UOp(Ops.LOAD, dtype, src=(g2.view(st),))
     b = UOp(Ops.LOAD, dtype, src=(g3.view(st),))
     out0 = UOp(Ops.STORE, dtypes.void, src=(g0.view(st), a + b))
@@ -286,7 +286,7 @@ class TestLinearizer(unittest.TestCase):
 
     # the first store is to lds and can be upcasted
     assert stores[0].src[-1].dtype == dtypes.float.vec(4)
-    assert any(x.op is Ops.DEFINE_MEMor x in stores[0].toposort())
+    assert any(x.op is Ops.DEFINE_MEM for x in stores[0].toposort())
     # the second store is to gds with no upcasts
     assert stores[1].src[-1].dtype == dtypes.float
     assert any(x.op is Ops.DEFINE_MEM for x in stores[1].toposort())
