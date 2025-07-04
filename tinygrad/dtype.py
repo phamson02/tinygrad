@@ -72,6 +72,8 @@ class PtrDType(DType):
     return f"{self.base.__repr__()}.ptr({self.size}{', local=True' if self.local else ''})" + (f'.vec({self.v})' if self.v != 1 else '')
   def __eq__(self, value: object) -> bool:
     return isinstance(value, PtrDType) and self.local == value.local
+  def __hash__(self):
+    return hash(self.local)
 @dataclass(frozen=True, eq=False)
 class ImageDType(PtrDType):
   shape: tuple[int, ...] = ()   # shape of the Image
